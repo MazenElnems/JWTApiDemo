@@ -22,6 +22,27 @@ namespace JWTAuthApp.Services
             _jwt = jwt.Value;
         }
 
+        public async Task<ApiResponse> GetTokenAsync(LoginModel model)
+        {
+            var user = await _userManager.FindByEmailAsync(model.Email);
+
+            if(user is null || !await _userManager.CheckPasswordAsync(user, model.Password))
+            {
+                return ApiResponse.Failure(errors: new List<string> { "Invalid Email or Password!" }, "Login Failed!");
+            }
+
+            var authResponse = new AuthResponse
+            {
+                Id = user.Id,
+                UserName = user.UserName,
+                Email = user.Email,
+                ExpiredOn = DateTime.UtcNow.AddMinutes(_jwt.DurationInMinutes),
+                Token = await GenerateJwtToken(user)
+            };
+
+            return ApiResponse<AuthResponse>.Success(authResponse, "Login Successful!");
+        }
+
         public async Task<ApiResponse> RegisterAsync(RegisterModel model)
         {
             if(await _userManager.FindByNameAsync(model.UserName) is not null)

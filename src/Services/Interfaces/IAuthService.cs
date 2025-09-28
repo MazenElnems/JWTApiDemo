@@ -5,5 +5,6 @@ namespace JWTAuthApp.Services.Interfaces
     public interface IAuthService
     {
         Task<ApiResponse> RegisterAsync(RegisterModel model);
+        Task<ApiResponse> GetTokenAsync(LoginModel model);
     }
 }

@@ -31,5 +31,23 @@ namespace JWTAuthApp.Controllers
 
             return Ok(response);
         }
+
+        [HttpPost("Login")] 
+        public async Task<IActionResult> LoginAsync([FromBody] LoginModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var reponse = await _authService.GetTokenAsync(model);
+
+            if(!reponse.IsSuccess)
+            {
+                return BadRequest(reponse);
+            }
+
+            return Ok(reponse);
+        }
     }
 }
