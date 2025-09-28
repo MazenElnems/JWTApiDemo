@@ -45,12 +45,17 @@ namespace JWTAuthApp.Services
 
         public async Task<ApiResponse> RegisterAsync(RegisterModel model)
         {
-            if(await _userManager.FindByNameAsync(model.UserName) is not null)
+            return await RegisterAsync(RoleNames.User, model);
+        }
+
+        public async Task<ApiResponse> RegisterAsync(string role, RegisterModel model)
+        {
+            if (await _userManager.FindByNameAsync(model.UserName) is not null)
             {
                 return ApiResponse.Failure(errors: new List<string> { "Username is already taken!" }, "Invalid Username!");
             }
 
-            if(await _userManager.FindByEmailAsync(model.Email) is not null)
+            if (await _userManager.FindByEmailAsync(model.Email) is not null)
             {
                 return ApiResponse.Failure(errors: new List<string> { "Email is already taken!" }, "Invalid Email!");
             }
@@ -65,14 +70,20 @@ namespace JWTAuthApp.Services
 
             var result = await _userManager.CreateAsync(user, model.Password);
 
-            if(!result.Succeeded)
+            if (!result.Succeeded)
             {
                 return ApiResponse.Failure(errors: result.Errors.Select(e => e.Description), "User creation failed!");
             }
 
-            result = await _userManager.AddToRoleAsync(user, RoleNames.User);
+            if(!await _roleManager.RoleExistsAsync(role))
+            {
+                await _userManager.DeleteAsync(user);
+                return ApiResponse.Failure(errors: new List<string> { "Role does not exist!" }, "Invalid Role!");
+            }
 
-            if(!result.Succeeded)
+            result = await _userManager.AddToRoleAsync(user, role);
+
+            if (!result.Succeeded)
             {
                 await _userManager.DeleteAsync(user);
                 return ApiResponse.Failure(errors: result.Errors.Select(e => e.Description), "Assigning role to user failed!");

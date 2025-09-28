@@ -3,6 +3,7 @@ using JWTAuthApp.Models.Data;
 using JWTAuthApp.Services;
 using JWTAuthApp.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.BearerToken;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -16,6 +17,7 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IRoleService, RoleService>();
 
 builder.Services.Configure<JWT>(builder.Configuration.GetSection("JWT"));   
 
@@ -38,8 +40,8 @@ var jwt = builder.Configuration.GetSection("JWT").Get<JWT>();
 
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultAuthenticateScheme = BearerTokenDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = BearerTokenDefaults.AuthenticationScheme;
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
     .AddJwtBearer(o =>
     {
