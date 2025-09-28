@@ -2,10 +2,14 @@ using JWTAuthApp.Models;
 using JWTAuthApp.Models.Data;
 using JWTAuthApp.Services;
 using JWTAuthApp.Services.Interfaces;
+using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -28,7 +32,30 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
     options.Password.RequireNonAlphanumeric = true;
     options.Password.RequiredLength = 6;
 }).AddEntityFrameworkStores<ApplicationDbContext>()
-  .AddDefaultTokenProviders();  
+  .AddDefaultTokenProviders();
+
+var jwt = builder.Configuration.GetSection("JWT").Get<JWT>();
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = BearerTokenDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = BearerTokenDefaults.AuthenticationScheme;
+})
+    .AddJwtBearer(o =>
+    {
+        o.RequireHttpsMetadata = false;
+        o.SaveToken = false;
+        o.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidIssuer = jwt?.Issuer,
+            ValidAudience = jwt?.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt?.Key))
+        };
+    });
 
 var app = builder.Build();
 
@@ -46,6 +73,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
