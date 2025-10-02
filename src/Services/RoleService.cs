@@ -1,4 +1,5 @@
 ﻿using JWTAuthApp.Models;
+using JWTAuthApp.Models.Entities;
 using JWTAuthApp.Services.Interfaces;
 using Microsoft.AspNetCore.Identity;
 

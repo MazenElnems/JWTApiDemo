@@ -1,10 +1,13 @@
 ﻿using JWTAuthApp.Models;
+using JWTAuthApp.Models.Entities;
 using JWTAuthApp.Services.Interfaces;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace JWTAuthApp.Services
@@ -31,16 +34,72 @@ namespace JWTAuthApp.Services
                 return ApiResponse.Failure(errors: new List<string> { "Invalid Email or Password!" }, "Login Failed!");
             }
 
+            RefreshToken refreshToken = new RefreshToken
+            {
+                CreatedAt = DateTime.UtcNow,
+                ExpiresOn = DateTime.UtcNow.AddDays(30),
+                Token = GenerateRefreshToken()
+            };
+
+            user.RefreshTokens.Add(refreshToken);
+            user.RefreshTokens.RemoveAll(rt => !rt.IsActive);
+            await _userManager.UpdateAsync(user);
+
             var authResponse = new AuthResponse
             {
                 Id = user.Id,
                 UserName = user.UserName,
                 Email = user.Email,
-                ExpiredOn = DateTime.UtcNow.AddMinutes(_jwt.DurationInMinutes),
-                Token = await GenerateJwtToken(user)
+                AccessTokenExpiration = DateTime.UtcNow.AddMinutes(_jwt.DurationInMinutes),
+                Token = await GenerateJwtToken(user),
+                RefreshToken = refreshToken.Token,
+                RefreshTokenExpiration = refreshToken.ExpiresOn
             };
 
             return ApiResponse<AuthResponse>.Success(authResponse, "Login Successful!");
+        }
+
+        public async Task<ApiResponse> RefreshTokenAsync(string token)
+        {
+            var user = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.RefreshTokens.Any(t => t.Token == token ));
+        
+            if(user is null)
+            {
+                return ApiResponse.Failure(new List<string> { "Invalid refresh token" });
+            }
+
+            var oldRefreshToken = user.RefreshTokens.FirstOrDefault(t => t.Token == token && t.IsActive);
+
+            if(oldRefreshToken is null)
+            {
+                return ApiResponse.Failure(new List<string> { "Inactive refresh token" });
+            }
+
+            oldRefreshToken.RevokedOn = DateTime.UtcNow;
+
+            var newRefreshToken = new RefreshToken
+            {
+                Token = GenerateRefreshToken(),
+                CreatedAt = DateTime.UtcNow,
+                ExpiresOn = oldRefreshToken.ExpiresOn
+            };
+
+            user.RefreshTokens.Add(newRefreshToken);
+            await _userManager.UpdateAsync(user);
+
+            var authResponse = new AuthResponse
+            {
+                Id = user.Id,
+                Email = user.Email,
+                UserName = user.UserName,
+                Token = await GenerateJwtToken(user),
+                RefreshTokenExpiration = newRefreshToken.ExpiresOn,
+                AccessTokenExpiration = DateTime.UtcNow.AddMinutes(_jwt.DurationInMinutes),
+                RefreshToken = newRefreshToken.Token,
+            };
+
+            return ApiResponse<AuthResponse>.Success(authResponse, "get access token successfully!");
         }
 
         public async Task<ApiResponse> RegisterAsync(RegisterModel model)
@@ -60,6 +119,11 @@ namespace JWTAuthApp.Services
                 return ApiResponse.Failure(errors: new List<string> { "Email is already taken!" }, "Invalid Email!");
             }
 
+            if(!await _roleManager.RoleExistsAsync(role))
+            {
+                return ApiResponse.Failure(errors: new List<string> { "Role does not exist!" }, "Invalid Role!");
+            }
+
             var user = new ApplicationUser
             {
                 UserName = model.UserName,
@@ -75,12 +139,6 @@ namespace JWTAuthApp.Services
                 return ApiResponse.Failure(errors: result.Errors.Select(e => e.Description), "User creation failed!");
             }
 
-            if(!await _roleManager.RoleExistsAsync(role))
-            {
-                await _userManager.DeleteAsync(user);
-                return ApiResponse.Failure(errors: new List<string> { "Role does not exist!" }, "Invalid Role!");
-            }
-
             result = await _userManager.AddToRoleAsync(user, role);
 
             if (!result.Succeeded)
@@ -89,13 +147,25 @@ namespace JWTAuthApp.Services
                 return ApiResponse.Failure(errors: result.Errors.Select(e => e.Description), "Assigning role to user failed!");
             }
 
+            RefreshToken refreshToken = new RefreshToken
+            {
+                CreatedAt = DateTime.UtcNow,
+                ExpiresOn = DateTime.UtcNow.AddDays(30),
+                Token = GenerateRefreshToken()
+            };
+
+            user.RefreshTokens.Add(refreshToken);
+            await _userManager.UpdateAsync(user);
+
             AuthResponse authResponse = new AuthResponse
             {
                 Id = user.Id,
                 UserName = user.UserName,
                 Email = user.Email,
-                ExpiredOn = DateTime.UtcNow.AddMinutes(_jwt.DurationInMinutes),
-                Token = await GenerateJwtToken(user)
+                AccessTokenExpiration = DateTime.UtcNow.AddMinutes(_jwt.DurationInMinutes),
+                Token = await GenerateJwtToken(user),
+                RefreshToken = refreshToken.Token,
+                RefreshTokenExpiration = refreshToken.ExpiresOn
             };
 
             return ApiResponse<AuthResponse>.Success(authResponse, "User created successfully!");
@@ -129,6 +199,15 @@ namespace JWTAuthApp.Services
             );
 
             return new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken);
+        }
+
+        private string GenerateRefreshToken()
+        {
+            var randomNumber = new byte[64];
+            using var rng = RandomNumberGenerator.Create();
+            
+            rng.GetBytes(randomNumber);
+            return Convert.ToBase64String(randomNumber);
         }
     }
 }

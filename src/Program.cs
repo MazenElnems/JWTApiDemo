@@ -1,5 +1,6 @@
 using JWTAuthApp.Models;
 using JWTAuthApp.Models.Data;
+using JWTAuthApp.Models.Entities;
 using JWTAuthApp.Services;
 using JWTAuthApp.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.BearerToken;
@@ -55,7 +56,8 @@ builder.Services.AddAuthentication(options =>
             ValidateLifetime = true,
             ValidIssuer = jwt?.Issuer,
             ValidAudience = jwt?.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt?.Key))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt?.Key)),
+            ClockSkew = TimeSpan.Zero
         };
     });
 
